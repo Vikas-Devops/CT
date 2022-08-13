@@ -1,0 +1,452 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+  PublicSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+  PublicSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.21.0/24
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+  DesiredCapacity:
+    Type: Number
+    Default: '2'
+    Description: Number of min ec2 available
+  MaxSize:
+    Type: Number
+    Default: '10'
+    Description: Maximum number of ec2 
+  DbUser:
+    Type: String
+  DbPassword:
+    Type: String
+Mapping:
+  Environment:
+    "123456789012": "dev"
+    "210987654321": "qa"
+    "012345678901": "prod"
+  AWSRegionToAMI:
+    ap-south-1:
+      AMIID: ami-0a813ddc2dd0aa2d1
+    ap-southeast-1:
+      AMIID: ami-08ce8fab6f3298bec
+    ap-southeast-2:
+      AMIID: ami-0a1f1569134e34315
+    ca-central-1:
+      AMIID: ami-0dbf9913d2926f6fd
+    ap-northeast-2:
+      AMIID: ami-0847abb93a1b78535  
+    ap-northeast-1:
+      AMIID: ami-021541b9f47c3c5cc
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !FindInMap [ "Environment", !Ref "AWS::AccountId"]
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+    Tags:
+      - Key: Name
+        Value: !FindInMap [ "Enviroment", !Ref "AWS::AccountId" ]
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAzs '' ]
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet (AZ1)
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public Subnet (AZ2)
+  PrivateSubnet1:
+   Type:  AWS::EC2::Subnet
+   Properties:
+   VpcId: !Ref VPC
+   AvailabilityZone: !Select [ 0, !GetAZs '' ]
+   MapPublicIpOnLaunch: true
+   Tags:
+    - Key: Name
+      Value: Private Subnet (AZ1)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+    VpcId: !Ref VPV
+    AvailabilityZone: !Select [ 1, !GetAZs '' ]
+    Tags:
+      - Key: Name
+        Value: Private Subnet (AZ2)
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+  PublicRouteTable: #Specifies a route table for a specified VPC. After you create a route table, you can add routes and associate the table with a subnet.
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  DefaultPublicRoute: #Specifies a route in a route table within a VPC
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnet1RouteTableAssociation: #Associates a subnet with a route table. The subnet and route table must be in the same VPC.
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+  ElbSecurityGroup1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group For Elastic Load Balancer(internet)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+  ElbSecurityGroup2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group For Elastic Load Balancer(internal)
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 9191 # Application 
+          ToPort: 9191 
+          CidrIp: !Ref ElbSecurityGroup1:
+  ALB1: # Internet Facing LB
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:         
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups: [!Ref 'ElbSecurityGroup2']
+  ALB2: # Internal Facing LB
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '30'
+      Subnets:         
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroups: [!Ref 'ElbSecurityGroup1']
+  ALBListener1: #For Internet Facing LB
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref 'TG1'
+      LoadBalancerArn: !Ref 'ALB1'
+      Port: '80'
+      Protocol: HTTP
+  ALBListenerRule1:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: ALBListener
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref 'TG1'
+      Conditions:
+      - Field: path-pattern
+        Values: [/]
+      ListenerArn: !Ref 'ALBListener1'
+      Priority: 1
+  ALBListener2: #For Internal Facing LB
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref 'TG2'
+      LoadBalancerArn: !Ref 'ALB2'
+      Port: '9191'
+      Protocol: TCP
+  ALBListenerRule2:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    DependsOn: ALBListener
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref 'TG2'
+      Conditions:
+      - Field: path-pattern
+        Values: [/]
+      ListenerArn: !Ref 'ALBListener2'
+      Priority: 1
+  TG1:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: 
+      - ECSALB1
+      - VPC
+    Properties:
+      HealthCheckEnables: false
+      Name: InternalLbTarget
+      TargetType: alb
+      Targets:
+      - Id: !GetAtt [ ALB2, Arn ]
+  TG2:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: 
+      - ALB2
+      - VPC
+    Properties:
+      HealthCheckIntervalSeconds: 6
+      HealthCheckPath: /healthcheck
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      HealthCheckPort: 'traffic-port'
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VPC
+      Matcher:
+        HttpCode: 200
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 5
+EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ec2.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: arn:aws:iam::aws:policy/AmazonEC2FullAccess
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: [ "ec2:*"]
+            Resource: '*'
+EC2SecurityGroup:
+  Type: AWS::EC2::SecurityGroup
+  Properties:
+    GroupDescription: Allow http to client host
+    VpcId: Ref: VPC
+    SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 9191
+        ToPort: 9191
+        CidrIp: !Ref ALB2
+LaunchConfiguration: 
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [ "AWSRegionToAMI", !Ref "AWS::Region", "AMIID"]
+      SecurityGroups: !Ref EC2SecurityGroup
+      InstanceType: !Ref InstanceType
+      BlockDeviceMappings: 
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeSize: '50'
+            VolumeType: gp3
+            DeleteOnTermination: false
+ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: ECSCluster
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs: !GetAtt [ TG2, Arn ]
+      LaunchConfigurationName: !Ref 'LaunchConfiguration'
+      MinSize: !Ref DesiredCapacity
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: 'true'
+AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [application-autoscaling.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: !Sub "${AWS::StackName}-${AWS::Region}-autoscaling-role"
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['application-autoscaling:*', 'cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm',
+              'ecs:DescribeServices', 'ecs:UpdateService']
+            Resource: '*'
+ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ALB2
+    Properties:
+      MaxCapacity: !Ref MaxSize
+      MinCapacity: !Ref DesiredCapacity
+      ResourceId: !Ref TG2
+      RoleARN: !GetAtt [AutoscalingRole, Arn]
+      ScalableDimension: ec2:service:DesiredCount
+      ServiceNamespace: ec2
+Ec2ScaleUpPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    DependsOn: ServiceScalingTarget
+    Properties:
+      PolicyName: !Sub "${AWS::Region}-scale-up-policy"
+      PolicyType: StepScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: 'ChangeInCapacity'
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 1
+        MetricAggregationType: 'Average'
+Ec2ScaleDownPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    DependsOn: ServiceScalingTarget
+    Properties:
+      PolicyName: !Sub "${AWS::Region}-scale-down-policy"
+      PolicyType: StepScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: 'ChangeInCapacity'
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: -1
+        MetricAggregationType: 'Average'
+HighCPUScaleUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-up if CPU > 60% for 1 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 60
+      AlarmActions: [!Ref Ec2ScaleUpPolicy]
+      ComparisonOperator: GreaterThanThreshold
+LowCPUScaleDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-down if CPU < 50% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 50
+      AlarmActions: [!Ref Ec2ScaleDownPolicy]
+      ComparisonOperator: LessThanThreshold
+DataBase1:
+  Type: AWS::RDS::DBInstance
+  Properties:
+    AllocatedStorage: 20
+    StorageType: gp2
+    DBInstanceClass: db.t2.small
+    DBName: devdb
+    Engine: mysql
+    EngineVersion: "8.0"
+    MasterUsername: !Ref DbUser
+    MasterUserPassword: !Ref DbPassword
+    VPCSecurityGroups:
+      - !Ref PrivateSubnet1
+      - !Ref PrivateSubnet2
+Outputs:
+Internet Facing LoadBalancer:
+  Value: !Ref ALB1
+Internal LoadBalancer:
+  Value: !Ref ALB2
+DBUrl:
+  Value: DataBase1
