@@ -29,6 +29,6 @@ Created micro bash script to fetch metadata from ec2 And put output in the json 
 
 
 # Challenge-3
-Due to the only knowlegde of scripting, this challenge is out of current experties, but I will definitely work on that.
+Due to the only knowlegde of scripting, this challenge is out of my current experties, but I will definitely work on that.
 
 
