@@ -25,6 +25,7 @@ Output
 
 Created micro bash script to fetch metadata from ec2 And put output in the json file
 #### Not able to format that json file correctly, need to search
+#### We can do this challenge with aws-sdk , but i didn't got the chance to work on sdk much.
 
 
 # Challenge-3
