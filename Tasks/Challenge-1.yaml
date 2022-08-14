@@ -132,18 +132,18 @@ Resources:
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
-  PublicRouteTable: #Specifies a route table for a specified VPC. After you create a route table, you can add routes and associate the table with a subnet.
+  PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-  DefaultPublicRoute: #Specifies a route in a route table within a VPC
+  DefaultPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: InternetGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-  PublicSubnet1RouteTableAssociation: #Associates a subnet with a route table. The subnet and route table must be in the same VPC.
+  PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTable
@@ -214,7 +214,7 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       SecurityGroups: [!Ref 'ElbSecurityGroup2']
-  ALB2: # Internal Facing LB
+  ALB2:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet
@@ -225,7 +225,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroups: [!Ref 'ElbSecurityGroup1']
-  ALBListener1: #For Internet Facing LB
+  ALBListener1:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
