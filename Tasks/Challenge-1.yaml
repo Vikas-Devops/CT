@@ -214,7 +214,7 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       SecurityGroups: [!Ref 'ElbSecurityGroup2']
-  ALB2:
+  ALB2: # Internal Facing LB
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet
@@ -225,7 +225,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroups: [!Ref 'ElbSecurityGroup1']
-  ALBListener1:
+  ALBListener1: #For Internet Facing LB
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
@@ -299,23 +299,6 @@ Resources:
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: 5
-EC2Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: [ec2.amazonaws.com]
-          Action: ['sts:AssumeRole']
-      Path: /
-      Policies:
-      - PolicyName: arn:aws:iam::aws:policy/AmazonEC2FullAccess
-        PolicyDocument:
-          Statement:
-          - Effect: Allow
-            Action: [ "ec2:*"]
-            Resource: '*'
 EC2SecurityGroup:
   Type: AWS::EC2::SecurityGroup
   Properties:
@@ -440,7 +423,10 @@ DataBase1:
     EngineVersion: "8.0"
     MasterUsername: !Ref DbUser
     MasterUserPassword: !Ref DbPassword
-    VPCSecurityGroups:
+DataBase1SubnetGroup:
+  Type: AWS::RDS::DBSubnetGroup
+  Properties:
+    SubnetId:
       - !Ref PrivateSubnet1
       - !Ref PrivateSubnet2
 Outputs:
